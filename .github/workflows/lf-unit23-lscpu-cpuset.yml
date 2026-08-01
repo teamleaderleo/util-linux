@@ -1,6 +1,9 @@
 name: Linux Fieldwork unit 23 lscpu cpuset gate
 
 on:
+  pull_request:
+    branches:
+      - linux-fieldwork/unit-23-lscpu-cpuset-native-base
   push:
     branches:
       - linux-fieldwork/unit-23-lscpu-cpuset-native-gate
@@ -51,7 +54,6 @@ jobs:
           mkdir -p "$EVIDENCE_DIR"
           {
             echo "head=$(git rev-parse HEAD)"
-            echo "parent=$(git rev-parse HEAD^)"
             echo "stable_fix=3cd5f1dd69495864f3046cdbcefa104786fe5a27"
             echo "path_blob=$(git hash-object lib/path.c)"
             git status --short --branch
