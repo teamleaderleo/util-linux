@@ -57,5 +57,34 @@ for dump in $(find "$TS_SELF"/dumps/ -maxdepth 1 -name "*.tar.gz" | sort); do
 	ts_finalize_subtest
 done
 
-ts_finalize
+# A malformed CPU list used to leave the caller-visible output pointer
+# referring to memory already released by ul_path_cpuparse().  lscpu then
+# released the same allocation again during ordinary context cleanup.  Keep
+# this fixture bounded to 16 CPUs so the affected allocation path is stable.
+malformed_root="$TS_OUTDIR/malformed-cpuset-root"
+rm -rf "$malformed_root"
+mkdir -p \
+	"$malformed_root/proc" \
+	"$malformed_root/sys/devices/system/cpu" \
+	"$malformed_root/sys/devices/system/node/node0"
+cp /proc/cpuinfo "$malformed_root/proc/cpuinfo"
+printf '15\n' >"$malformed_root/sys/devices/system/cpu/kernel_max"
+printf '0-15\n' >"$malformed_root/sys/devices/system/cpu/possible"
+printf '0-15\n' >"$malformed_root/sys/devices/system/cpu/present"
+printf '5,12-%%\n' >"$malformed_root/sys/devices/system/cpu/online"
+printf '0000ffff\n' >"$malformed_root/sys/devices/system/node/node0/cpumap"
 
+for mode in text json; do
+	ts_init_subtest "malformed-cpuset-$mode"
+	args=("$TS_CMD_LSCPU" --sysroot "$malformed_root")
+	[[ "$mode" == text ]] || args+=(--json)
+
+	if ! (ulimit -c 0; "${args[@]}") >/dev/null 2>&1; then
+		ts_failed "lscpu failed after malformed cpuset input ($mode)"
+	fi
+
+	ts_finalize_subtest
+done
+rm -rf "$malformed_root"
+
+ts_finalize
