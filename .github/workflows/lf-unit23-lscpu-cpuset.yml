@@ -1,0 +1,80 @@
+name: Linux Fieldwork unit 23 lscpu cpuset gate
+
+on:
+  pull_request:
+    branches:
+      - linux-fieldwork/unit-23-lscpu-cpuset-native-base
+  push:
+    branches:
+      - linux-fieldwork/unit-23-lscpu-cpuset-native-gate
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-lscpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      COMPILER: gcc
+      COMPILER_VERSION: "13"
+      SANITIZE: "no"
+      EVIDENCE_DIR: artifacts/lf-unit23-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out stable fixed source
+        uses: actions/checkout@v4
+
+      - name: Install util-linux CI dependencies
+        run: sudo -E .github/workflows/cibuild-setup-ubuntu.sh
+
+      - name: Configure and build with the project CI path
+        run: .github/workflows/cibuild.sh CONFIGUREFAST MAKE
+
+      - name: Run project-native lscpu tests
+        run: |
+          set -euo pipefail
+          make check-programs
+          sudo -E make check TS_OPTS="--parallel=1 lscpu"
+
+      - name: Run deterministic malformed-cpuset matrix twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          bash .github/workflows/lf-unit23-cpuset-gate.sh \
+            --candidate "$PWD/lscpu" \
+            --output-dir "$EVIDENCE_DIR"
+
+      - name: Record complete source and test identities
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          {
+            echo "head=$(git rev-parse HEAD)"
+            echo "stable_fix=3cd5f1dd69495864f3046cdbcefa104786fe5a27"
+            echo "path_blob=$(git hash-object lib/path.c)"
+            git status --short --branch
+          } >"$EVIDENCE_DIR/repository.txt"
+          if [[ -x ./lscpu ]]; then
+            sha256sum ./lscpu >"$EVIDENCE_DIR/lscpu.sha256"
+          fi
+          if [[ -d tests/output ]]; then
+            find tests/output -type f -print0 | sort -z | xargs -0 sha256sum \
+              >"$EVIDENCE_DIR/test-output.sha256" || true
+          fi
+          if [[ -d tests/diff ]]; then
+            find tests/diff -type f -print -exec sed -n '1,200p' {} \; \
+              >"$EVIDENCE_DIR/test-diffs.txt" || true
+          fi
+
+      - name: Upload native gate receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lf-unit23-util-linux-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_DIR }}/
+          if-no-files-found: error
+          retention-days: 30
