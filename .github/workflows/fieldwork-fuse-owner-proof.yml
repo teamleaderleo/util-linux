@@ -1,0 +1,54 @@
+name: Fieldwork FUSE owner proof
+
+on:
+  pull_request:
+    branches:
+      - fieldwork/fuse-owner-statx-proof-base
+
+permissions:
+  contents: read
+
+jobs:
+  fuse-owner:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build and FUSE prerequisites
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf automake autopoint bison build-essential gettext \
+            libcap-ng-dev libmount-dev libpam0g-dev libselinux1-dev \
+            libsystemd-dev libtool pkg-config python3 systemd-dev
+
+      - name: Build util-linux
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ./autogen.sh
+          ./configure --disable-use-tty-group
+          make -j"$(nproc)"
+
+      - name: Run exact FUSE owner regression
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo --preserve-env=PATH ./tests/run.sh --show-diff mount/fuse-owner-statx | tee fuse-owner-statx.log
+          grep -F "mount: FUSE owner statx" fuse-owner-statx.log
+          if grep -Eiq 'skip|ignored' fuse-owner-statx.log; then
+            echo "FIELDWORK_RESULT=SKIP"
+          else
+            grep -F "Success" fuse-owner-statx.log
+            echo "FIELDWORK_RESULT=PASS"
+          fi
+
+      - name: Upload exact test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuse-owner-statx-log
+          path: fuse-owner-statx.log
+          if-no-files-found: error
