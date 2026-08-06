@@ -1,1 +1,1 @@
-Run the exact nonzero-owner FUSE mount regression on a capability-aware hosted carrier.
+Run the exact nonzero-owner FUSE mount regression with the native capability helper built; a skip is not product proof.
