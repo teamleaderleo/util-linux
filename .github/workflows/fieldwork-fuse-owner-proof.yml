@@ -24,13 +24,15 @@ jobs:
             libcap-ng-dev libmount-dev libpam0g-dev libselinux1-dev \
             libsystemd-dev libtool pkg-config python3 systemd-dev
 
-      - name: Build util-linux
+      - name: Build util-linux and capability helper
         shell: bash
         run: |
           set -euxo pipefail
           ./autogen.sh
           ./configure --disable-use-tty-group
           make -j"$(nproc)"
+          make test_cap
+          test -x ./test_cap
 
       - name: Run exact FUSE owner regression
         shell: bash
@@ -40,10 +42,11 @@ jobs:
           grep -F "mount: FUSE owner statx" fuse-owner-statx.log
           if grep -Eiq 'skip|ignored' fuse-owner-statx.log; then
             echo "FIELDWORK_RESULT=SKIP"
-          else
-            grep -F "Success" fuse-owner-statx.log
-            echo "FIELDWORK_RESULT=PASS"
+            echo "A skipped capability-gated discriminator is not product proof." >&2
+            exit 1
           fi
+          grep -F "Success" fuse-owner-statx.log
+          echo "FIELDWORK_RESULT=PASS"
 
       - name: Upload exact test log
         if: always()
