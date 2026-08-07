@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+#
+# This file is part of util-linux.
+#
+# This file is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This file is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+TS_TOPDIR="${0%/*}/../.."
+TS_DESC="FUSE owner statx"
+
+. "$TS_TOPDIR"/functions.sh
+ts_init "$*"
+
+ts_check_test_command "$TS_CMD_MOUNT"
+ts_check_test_command "$TS_CMD_UMOUNT"
+ts_check_test_command "$TS_CMD_FINDMNT"
+
+ts_skip_nonroot
+ts_skip_capability sys_admin
+ts_skip_docker
+
+[ -c /dev/fuse ] || ts_skip "no /dev/fuse"
+
+case "$($TS_CMD_MOUNT --version)" in
+*fd-based-mount*) ;;
+*) ts_skip "fd-based mount support disabled" ;;
+esac
+
+TARGET="$TS_OUTDIR/fuse-owner-statx"
+mkdir -p "$TARGET" || ts_die "failed to create mountpoint"
+
+exec {fusedev}<>/dev/fuse || ts_skip "cannot open /dev/fuse"
+
+function cleanup {
+	$TS_CMD_UMOUNT -l "$TARGET" &>/dev/null || :
+	exec {fusedev}>&-
+	rmdir "$TARGET" &>/dev/null || :
+}
+trap cleanup EXIT
+
+$TS_CMD_MOUNT -cint fuse \
+	-o "rootmode=40555,fd=$fusedev,user_id=65534,group_id=65534" \
+	none "$TARGET" \
+	|| ts_die "failed to attach user-owned FUSE mount"
+
+$TS_CMD_FINDMNT --kernel --mountpoint "$TARGET" &>/dev/null \
+	|| ts_die "FUSE mount is not attached"
+
+ts_log "Success"
+
+cleanup
+trap - EXIT
+ts_finalize
