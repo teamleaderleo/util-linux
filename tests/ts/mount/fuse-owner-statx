@@ -24,7 +24,7 @@ ts_check_test_command "$TS_CMD_UMOUNT"
 ts_check_test_command "$TS_CMD_FINDMNT"
 
 ts_skip_nonroot
-ts_skip_capability cap_sys_admin
+ts_skip_capability sys_admin
 ts_skip_docker
 
 [ -c /dev/fuse ] || ts_skip "no /dev/fuse"
