@@ -1,0 +1,1 @@
+Run the exact nonzero-owner FUSE mount regression with the native capability helper built; a skip is not product proof.
