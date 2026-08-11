@@ -53,7 +53,7 @@ static int get_minix_version(const unsigned char *data, int *other_endian)
 			version = 2;
 			break;
 		default:
-			if (sb3->s_magic == MINIX3_SUPER_MAGIC)
+			if (swab16(sb3->s_magic) == MINIX3_SUPER_MAGIC)
 				version = 3;
 			break;
 		}
