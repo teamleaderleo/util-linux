@@ -167,13 +167,13 @@ int blkid_flush_cache(blkid_cache cache)
 			break;
 	}
 
-	if (ret >= 0) {
-		cache->bic_flags &= ~BLKID_BIC_FL_CHANGED;
+	if (ret >= 0)
 		ret = 1;
-	}
 
-	if (close_stream(file) != 0)
+	if (close_stream(file) != 0) {
+		ret = -BLKID_ERR_IO;
 		DBG(SAVE, ul_debug("write failed: %s", filename));
+	}
 
 	if (opened != filename) {
 		if (ret < 0) {
@@ -198,10 +198,12 @@ int blkid_flush_cache(blkid_cache cache)
 				DBG(SAVE, ul_debug("can't rename %s to %s",
 						opened, filename));
 			} else {
+				cache->bic_flags &= ~BLKID_BIC_FL_CHANGED;
 				DBG(SAVE, ul_debug("moved temp cache %s", opened));
 			}
 		}
-	}
+	} else if (ret > 0)
+		cache->bic_flags &= ~BLKID_BIC_FL_CHANGED;
 
 done:
 	free(tmp);
