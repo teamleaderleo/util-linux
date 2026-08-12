@@ -72,5 +72,38 @@ if grep "$TS_LODEV" "$BLKID_FILE" &>/dev/null ; then
 	ts_failed "cache garbage collection failed"
 fi
 
+# A failed final write must not replace the existing cache. Use a new
+# detached loop-device entry to make garbage collection dirty the cache,
+# then prohibit regular-file writes only in the blkid subprocess. Ignoring
+# SIGXFSZ lets stdio report EFBIG through close_stream() instead of killing
+# the process before libblkid can handle the write failure.
+ts_device_init
+
+"$TS_CMD_MKSWAP" --quiet --pagesize 4096 --endianness little \
+	--uuid 33333333-3333-3333-3333-333333333333 \
+	"$TS_LODEV" &>/dev/null
+
+"$TS_CMD_BLKID" "$TS_LODEV" &>/dev/null
+cp "$BLKID_FILE" "$BLKID_FILE.before-write-error"
+ts_device_deinit "$TS_LODEV"
+
+(
+	ulimit -f 0
+	trap '' SIGXFSZ
+	"$TS_CMD_BLKID" --garbage-collect &>/dev/null
+)
+
+if ! cmp -s "$BLKID_FILE.before-write-error" "$BLKID_FILE"; then
+	ts_failed "failed cache write replaced previous cache"
+fi
+
+rm -f "$BLKID_FILE.before-write-error"
+
+# A normal retry must still be able to garbage-collect the stale entry.
+"$TS_CMD_BLKID" --garbage-collect &>/dev/null
+if grep "$TS_LODEV" "$BLKID_FILE" &>/dev/null ; then
+	ts_failed "cache retry after write failure failed"
+fi
+
 
 ts_finalize
